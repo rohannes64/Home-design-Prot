@@ -3,7 +3,7 @@ import { useDropzone } from 'react-dropzone';
 import { useQuery } from '@tanstack/react-query';
 import { Upload, Camera, Wand2, Download, Share2, MessageSquare, X, ChevronLeft, Zap, Check, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { visualizerAPI, productsAPI } from '../utils/api';
+import { visualizerAPI, productsAPI, rendersAPI } from '../utils/api';
 import QuoteModal from '../components/visualizer/QuoteModal';
 
 const ZONES = ['floor', 'wall', 'ceiling', 'pillar', 'cornice', 'wainscoting', 'elevation', 'exterior'];
@@ -113,6 +113,48 @@ export default function VisualizerPage() {
   const handleReset = () => {
     setStep(1); setPhoto(null); setUploadedPhoto(null);
     setSelectedProducts([]); setActivePreset(null); setResult(null);
+  };
+
+  const handleShare = async () => {
+    if (!result?.renderId) {
+      const fallbackUrl = result?.renderedUrl || photo || window.location.href;
+      try {
+        await navigator.clipboard.writeText(fallbackUrl);
+        toast.success('Visualization image link copied!');
+      } catch (err) {
+        toast.error('Failed to copy link');
+      }
+      return;
+    }
+
+    try {
+      const res = await rendersAPI.share(result.renderId);
+      await navigator.clipboard.writeText(res.data.shareUrl);
+      toast.success('Share link copied to clipboard!');
+    } catch (err) {
+      toast.error('Failed to copy share link');
+    }
+  };
+
+  const handleDownload = async (url, filename) => {
+    try {
+      const proxyUrl = `/api/renders/download?url=${encodeURIComponent(url)}`;
+      const response = await fetch(proxyUrl);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      // Fallback: open in a new tab if fetch fails
+      window.open(url, '_blank');
+    }
   };
 
   return (
@@ -348,11 +390,11 @@ export default function VisualizerPage() {
 
           {/* Actions */}
           <div style={{ display:'flex', gap:'0.75rem', flexWrap:'wrap', marginBottom:'2rem' }}>
-            <a href={result.hdUrl || result.renderedUrl} download="arteffects-visualization.jpg"
+            <button onClick={() => handleDownload(result.hdUrl || result.renderedUrl, 'arteffects-visualization.jpg')}
               className="btn btn-primary">
               <Download size={16} /> Download HD render
-            </a>
-            <button className="btn btn-secondary" onClick={() => toast.success('Share link copied!')}>
+            </button>
+            <button className="btn btn-secondary" onClick={handleShare}>
               <Share2 size={16} /> Share visualization
             </button>
             <button className="btn btn-secondary" onClick={() => setShowQuoteModal(true)}>
