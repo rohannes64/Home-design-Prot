@@ -1,6 +1,22 @@
 require("dotenv").config();
 const dns = require("dns");
 dns.setServers(["8.8.8.8", "1.1.1.1"]);
+
+// Global override for dns.lookup to use dns.resolve4 (Google/Cloudflare DNS) instead of OS getaddrinfo
+const originalLookup = dns.lookup;
+dns.lookup = function(hostname, options, callback) {
+  if (typeof options === "function") {
+    callback = options;
+    options = {};
+  }
+  dns.resolve4(hostname, (err, addresses) => {
+    if (err || !addresses || !addresses.length) {
+      return originalLookup(hostname, options, callback);
+    }
+    callback(null, addresses[0], 4);
+  });
+};
+
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
