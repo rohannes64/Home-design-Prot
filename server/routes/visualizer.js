@@ -50,15 +50,55 @@ router.post('/generate', optionalAuth, async (req, res) => {
       return res.status(400).json({ error: 'Select at least one product or preset' });
     }
 
-    // Build generation prompt from selected products
-    const productDetails = await buildProductPrompt(appliedProducts, preset);
-    
-    // Call AI image generation (Stability AI / Replicate)
-    const { renderedUrl, renderedPublicId } = await generateVisualization(
-      photoUrl,
-      productDetails.prompt,
-      productDetails.negativePrompt
-    );
+    const hfKey = process.env.HF_API_KEY;
+    const hasHF = hfKey && hfKey.trim() !== '';
+
+    let renderedUrl, renderedPublicId, logAppliedProducts;
+
+    if (hasHF && appliedProducts && appliedProducts.length > 0 && !preset) {
+      console.log('Using Hugging Face SegFormer API + Hugging Face Inpainting API (No local Python)');
+      
+      // Resolve product information
+      const ap = appliedProducts[0];
+      const product = await Product.findById(ap.productId);
+      if (!product) {
+        return res.status(400).json({ error: 'Selected product not found' });
+      }
+
+      // 1. Get binary mask from Hugging Face SegFormer
+      console.log(`Extracting mask from Hugging Face for zone: ${ap.zone}`);
+      const maskBase64 = await getMaskFromHuggingFace(photoUrl, ap.zone);
+
+      // 2. Build descriptive prompt for the stone texture replacement
+      const finish = product.finish || 'polished';
+      const categoryName = product.category ? product.category.replace('_', ' ') : 'stone';
+      const inpaintPrompt = `highly detailed ${finish} ${product.name} ${categoryName} floor or wall tile, photorealistic interior render, 8k, warm lighting`;
+
+      // 3. Send mask, base photo, and prompt to Hugging Face
+      console.log('Calling Hugging Face Inpainting API...');
+      const hfResult = await generateWithHuggingFaceInpainting(photoUrl, maskBase64, inpaintPrompt);
+      renderedUrl = hfResult.renderedUrl;
+      renderedPublicId = hfResult.renderedPublicId;
+
+      logAppliedProducts = [{
+        product: ap.productId,
+        productName: product.name,
+        zone: ap.zone,
+        coverage: ap.coverage || 0
+      }];
+
+    } else {
+      // Fallback: Original Stability AI / Replicate image generation
+      const productDetails = await buildProductPrompt(appliedProducts, preset);
+      const visualizerRes = await generateVisualization(
+        photoUrl,
+        productDetails.prompt,
+        productDetails.negativePrompt
+      );
+      renderedUrl = visualizerRes.renderedUrl;
+      renderedPublicId = visualizerRes.renderedPublicId;
+      logAppliedProducts = productDetails.appliedProducts;
+    }
 
     // Add watermark
     const watermarkedUrl = addWatermark(renderedUrl);
@@ -72,10 +112,10 @@ router.post('/generate', optionalAuth, async (req, res) => {
         user: userIdToUse,
         originalPhoto: { url: photoUrl, publicId: photoPublicId },
         renderedPhoto: { url: renderedUrl, publicId: renderedPublicId },
-        appliedProducts: productDetails.appliedProducts,
+        appliedProducts: logAppliedProducts,
         preset: preset || null,
         generationStatus: 'completed',
-        generationPrompt: productDetails.prompt,
+        generationPrompt: preset || 'Hugging Face Inpainting Render',
         generationDuration: Date.now() - startTime,
         watermarkedUrl
       });
@@ -87,12 +127,12 @@ router.post('/generate', optionalAuth, async (req, res) => {
       renderedUrl: watermarkedUrl,
       hdUrl: renderedUrl,
       generationDuration: Date.now() - startTime,
-      appliedProducts: productDetails.appliedProducts
+      appliedProducts: logAppliedProducts
     });
 
   } catch (err) {
     console.error('Generation error:', err);
-    res.status(500).json({ error: 'Generation failed. Please try again.' });
+    res.status(500).json({ error: `Generation failed: ${err.message}` });
   }
 });
 
@@ -264,15 +304,107 @@ function addWatermark(imageUrl) {
   return imageUrl.replace('/upload/', `/upload/l_text:Arial_32_bold:${watermarkText},co_white,o_60,g_south_east,x_20,y_20/`);
 }
 
-// Helper: Detect zones using SAM or similar
-async function detectZones(photoUrl) {
-  // Simplified zone detection
-  // In production, use Meta SAM via Replicate or a custom segmentation model
-  return [
-    { type: 'wall', confidence: 0.92, description: 'Main walls detected' },
-    { type: 'floor', confidence: 0.95, description: 'Floor area detected' },
-    { type: 'ceiling', confidence: 0.78, description: 'Ceiling detected' }
-  ];
+// Helper: Extract specific zone mask as Base64 string using Hugging Face SegFormer API
+async function getMaskFromHuggingFace(photoUrl, zoneName) {
+  const hfKey = process.env.HF_API_KEY;
+  if (!hfKey) {
+    throw new Error('HF_API_KEY is not configured in the server environment (.env)');
+  }
+
+  // 1. Download original room image buffer
+  let roomBuffer;
+  try {
+    const roomRes = await axios.get(photoUrl, { responseType: 'arraybuffer' });
+    roomBuffer = Buffer.from(roomRes.data);
+  } catch (err) {
+    throw new Error(`Failed to download room image for segmentation: ${err.message}`);
+  }
+
+  // 2. Query Hugging Face SegFormer Model for segment maps
+  try {
+    const hfUrl = "https://api-inference.huggingface.co/models/nvidia/segformer-b2-finetuned-ade-512-512";
+    const hfResponse = await axios.post(hfUrl, roomBuffer, {
+      headers: {
+        'Authorization': `Bearer ${hfKey}`,
+        'Content-Type': 'image/jpeg'
+      }
+    });
+
+    const segments = hfResponse.data;
+    if (!Array.isArray(segments)) {
+      throw new Error(`SegFormer returned invalid response format: ${JSON.stringify(segments)}`);
+    }
+
+    // Look for target zone name (e.g. wall/floor/ceiling)
+    const targetSegment = segments.find(s => s.label.toLowerCase() === zoneName.toLowerCase());
+    if (!targetSegment) {
+      throw new Error(`Target zone '${zoneName}' was not detected in this room image by the AI model.`);
+    }
+
+    // Return the base64 mask string
+    return targetSegment.mask;
+
+  } catch (err) {
+    console.error('Hugging Face SegFormer segmentation error:', err.response?.data ? err.response.data.toString() : err.message);
+    throw new Error(`Hugging Face segmentation failed: ${err.message}`);
+  }
+}
+
+// Helper: Call Hugging Face Stable Diffusion Inpainting API and upload output to Cloudinary
+async function generateWithHuggingFaceInpainting(roomUrl, maskBase64, prompt) {
+  const hfKey = process.env.HF_API_KEY;
+  if (!hfKey) {
+    throw new Error('HF_API_KEY is not configured in the server environment (.env)');
+  }
+
+  // 1. Download original room image and get base64
+  let roomBase64;
+  try {
+    const roomRes = await axios.get(roomUrl, { responseType: 'arraybuffer' });
+    roomBase64 = Buffer.from(roomRes.data).toString('base64');
+  } catch (err) {
+    throw new Error(`Failed to download room image for HF generation: ${err.message}`);
+  }
+
+  // 2. Call Hugging Face API
+  try {
+    const hfUrl = "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-inpainting";
+    const payload = {
+      inputs: prompt,
+      image: roomBase64,
+      mask_image: maskBase64
+    };
+
+    const response = await axios.post(hfUrl, payload, {
+      headers: {
+        'Authorization': `Bearer ${hfKey}`,
+        'Content-Type': 'application/json'
+      },
+      responseType: 'arraybuffer'
+    });
+
+    const finalBuffer = Buffer.from(response.data);
+
+    // 3. Upload composited result to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        { folder: 'arteffects/renders' },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      ).end(finalBuffer);
+    });
+
+    return {
+      renderedUrl: uploadResult.secure_url,
+      renderedPublicId: uploadResult.public_id
+    };
+
+  } catch (err) {
+    console.error('Hugging Face Inpainting API error:', err.response?.data ? err.response.data.toString() : err.message);
+    throw new Error(`Hugging Face API call failed: ${err.message}`);
+  }
 }
 
 module.exports = router;
