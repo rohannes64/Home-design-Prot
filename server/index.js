@@ -50,9 +50,32 @@ app.get("/health", (req, res) =>
 );
 
 // MongoDB connection
+const User = require("./models/User");
 mongoose
     .connect(process.env.MONGODB_URI || "mongodb://localhost:27017/arteffects")
-    .then(() => console.log("MongoDB connected"))
+    .then(async () => {
+        console.log("MongoDB connected");
+        
+        // Auto-create admin user on boot
+        try {
+            const adminEmail = process.env.ADMIN_EMAIL || "admin@arteffects.in";
+            const adminPassword = process.env.ADMIN_PASSWORD || "ArtEffects@2024";
+            
+            const existingAdmin = await User.findOne({ email: adminEmail });
+            if (!existingAdmin) {
+                await User.create({
+                    name: "Admin User",
+                    email: adminEmail,
+                    password: adminPassword,
+                    role: "admin",
+                    isVerified: true // Pre-verify the admin account
+                });
+                console.log("✅ Auto-created admin user on boot:", adminEmail);
+            }
+        } catch (adminErr) {
+            console.error("❌ Failed to auto-create admin on boot:", adminErr.message);
+        }
+    })
     .catch((err) => console.error("MongoDB error:", err));
 
 const PORT = process.env.PORT || 5000;
