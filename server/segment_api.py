@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
 
 # ── Config ─────────────────────────────────────────────────────────
-SEG_MODEL   = "nvidia/segformer-b2-finetuned-ade-512-512"
+SEG_MODEL   = "nvidia/segformer-b0-finetuned-ade-512-512"
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
 
 ADE20K_ZONES = {
