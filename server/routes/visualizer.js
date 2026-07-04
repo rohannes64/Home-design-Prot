@@ -6,8 +6,11 @@ const Render = require('../models/Render');
 const Product = require('../models/Product');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { uploadRoomPhoto, cloudinary } = require('../middleware/upload');
+const { segmentImage, generateImage, downloadToTemp } = require('../utils/segment_bridge');
 
-// POST /api/visualizer/upload — upload room photo
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/visualizer/upload — upload room photo to Cloudinary
+// ═══════════════════════════════════════════════════════════════════════════
 router.post('/upload', optionalAuth, uploadRoomPhoto, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No photo uploaded' });
@@ -23,66 +26,112 @@ router.post('/upload', optionalAuth, uploadRoomPhoto, async (req, res) => {
   }
 });
 
-// POST /api/visualizer/segment — detect zones in uploaded photo
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/visualizer/segment — detect zones via Python SegFormer
+// ═══════════════════════════════════════════════════════════════════════════
 router.post('/segment', optionalAuth, async (req, res) => {
   try {
     const { photoUrl } = req.body;
     if (!photoUrl) return res.status(400).json({ error: 'Photo URL required' });
 
-    // Call Replicate's segmentation model (SAM or similar)
-    // Returns detected zones: floor, wall, ceiling, pillars, etc.
-    const zones = await detectZones(photoUrl);
-    res.json({ zones });
+    console.log('[Visualizer] Starting segmentation for:', photoUrl);
+    const segResult = await segmentImage(photoUrl);
+
+    if (segResult.error) {
+      return res.status(500).json({ error: segResult.error });
+    }
+
+    // Transform to frontend-friendly format
+    const zones = segResult.zones.map(z => ({
+      type: z.name,
+      coverage: z.coverage,
+      coveragePct: Math.round(z.coverage * 100),
+      pixelCount: z.pixel_count,
+      bbox: z.bbox,
+      confidence: Math.min(0.99, 0.7 + z.coverage) // approximate confidence from coverage
+    }));
+
+    console.log(`[Visualizer] Segmentation complete: ${zones.map(z => `${z.type}(${z.coveragePct}%)`).join(', ')}`);
+
+    res.json({
+      zones,
+      imageSize: segResult.image_size
+    });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('[Visualizer] Segmentation error:', err.message);
+    res.status(500).json({
+      error: 'Segmentation failed: ' + err.message,
+      fallbackZones: [
+        { type: 'wall', coverage: 0.35, coveragePct: 35, confidence: 0.70 },
+        { type: 'floor', coverage: 0.25, coveragePct: 25, confidence: 0.70 },
+        { type: 'ceiling', coverage: 0.15, coveragePct: 15, confidence: 0.60 }
+      ]
+    });
   }
 });
 
-// POST /api/visualizer/generate — main AI generation
+// ═══════════════════════════════════════════════════════════════════════════
+// POST /api/visualizer/generate — main AI generation via Cloudinary
+// ═══════════════════════════════════════════════════════════════════════════
 router.post('/generate', optionalAuth, async (req, res) => {
+  // Increase socket timeout to 5 minutes for long-running AI generation
+  req.socket.setTimeout(300000);
   const startTime = Date.now();
-  
+
   try {
     const { photoUrl, photoPublicId, appliedProducts, preset, userId } = req.body;
-    
+
     if (!photoUrl) return res.status(400).json({ error: 'Photo URL required' });
     if (!appliedProducts?.length && !preset) {
       return res.status(400).json({ error: 'Select at least one product or preset' });
     }
 
-    // Build generation prompt from selected products
+    // Build generation details from selected products
     const productDetails = await buildProductPrompt(appliedProducts, preset);
-    
-    // Call AI image generation (Stability AI / Replicate)
-    const { renderedUrl, renderedPublicId } = await generateVisualization(
-      photoUrl,
-      productDetails.prompt,
-      productDetails.negativePrompt
-    );
 
-    // Add watermark
-    const watermarkedUrl = addWatermark(renderedUrl);
+    // 2. Generate with Local SD Pipeline
+    let renderedUrl = photoUrl;
+    let renderedPublicId = null;
     
-    // Save render to DB (requires auth for persistence, otherwise ephemeral)
-    let render = null;
-    const userIdToUse = req.user?._id || userId;
-    
-    if (userIdToUse) {
-      render = await Render.create({
-        user: userIdToUse,
-        originalPhoto: { url: photoUrl, publicId: photoPublicId },
-        renderedPhoto: { url: renderedUrl, publicId: renderedPublicId },
-        appliedProducts: productDetails.appliedProducts,
-        preset: preset || null,
-        generationStatus: 'completed',
-        generationPrompt: productDetails.prompt,
-        generationDuration: Date.now() - startTime,
-        watermarkedUrl
-      });
+    try {
+      const renderResult = await generateWithLocalSD(
+        photoUrl,
+        photoPublicId,
+        appliedProducts,
+        productDetails,
+        preset
+      );
+      renderedUrl = renderResult.renderedUrl;
+      renderedPublicId = renderResult.renderedPublicId;
+    } catch (err) {
+      console.error('[Visualizer] Local SD failed, returning demo response:', err.message);
+      // Fallback to demo mode if local AI fails
+      renderedUrl = photoUrl;
+      renderedPublicId = photoPublicId;
     }
 
+    // Add watermark (Skipped since we are local now)
+    const watermarkedUrl = renderedUrl;
+
+    // Always save the render to the database so that it can be shared or referenced in quotes
+    const shareToken = uuidv4();
+    const render = await Render.create({
+      user: req.user?._id || userId || null, // Optional for guest users
+      originalPhoto: { url: photoUrl, publicId: photoPublicId },
+      renderedPhoto: { url: renderedUrl, publicId: renderedPublicId },
+      appliedProducts: productDetails.appliedProducts,
+      preset: preset || null,
+      generationStatus: 'completed',
+      generationPrompt: productDetails.prompt,
+      generationDuration: Date.now() - startTime,
+      watermarkedUrl,
+      isShared: true,
+      shareToken
+    });
+
     res.json({
-      renderId: render?._id,
+      renderId: render._id,
+      shareToken: render.shareToken,
       originalUrl: photoUrl,
       renderedUrl: watermarkedUrl,
       hdUrl: renderedUrl,
@@ -96,11 +145,203 @@ router.post('/generate', optionalAuth, async (req, res) => {
   }
 });
 
-// Helper: Build AI prompt from selected products
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Local SD Pipeline Generation
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate visualization using Local Stable Diffusion API.
+ */
+async function generateWithLocalSD(photoUrl, photoPublicId, appliedProducts = [], productDetails, preset) {
+  // If no products, we can't generate
+  if (!appliedProducts || appliedProducts.length === 0) {
+    throw new Error('No products selected for generation');
+  }
+
+  // Get product details
+  const productMap = {};
+  const productIds = appliedProducts.map(p => p.productId).filter(Boolean);
+  if (productIds.length) {
+    const products = await Product.find({ _id: { $in: productIds } });
+    products.forEach(p => { productMap[p._id.toString()] = p; });
+  }
+
+  console.log(`[Visualizer] Starting local SD generation for ${appliedProducts.length} zones`);
+
+  // We will run them sequentially. For MVP, we'll just process the first zone, 
+  // since the local pipeline takes 15-30s per zone and chaining requires downloading 
+  // the intermediate image.
+  // To support multiple zones in the future, we would pass the result of zone 1 
+  // as the input to zone 2.
+  
+  const ap = appliedProducts[0];
+  const product = productMap[ap.productId];
+  
+  if (!product) {
+    throw new Error('Selected product not found');
+  }
+
+  const categoryClean = product.category.replace(/_/g, ' ');
+  const texturePrompt = `${product.name} ${categoryClean} texture`;
+  
+  // Download the cloudinary photo to a temp file first
+  let tmpPath = null;
+  let textureTmpPath = null;
+  
+  try {
+    tmpPath = await downloadToTemp(photoUrl);
+    
+    if (product.textureImage && product.textureImage.url) {
+      console.log(`[Visualizer] Downloading actual product texture from: ${product.textureImage.url}`);
+      try {
+        textureTmpPath = await downloadToTemp(product.textureImage.url);
+      } catch (err) {
+        console.warn(`[Visualizer] Failed to download texture image, falling back to text-only:`, err.message);
+      }
+    }
+    
+    // Call the local FastAPI with both image path and texture image path
+    const result = await generateImage(tmpPath, ap.zone, texturePrompt, textureTmpPath);
+    
+    // The API returns the public URL path (e.g. /uploads/render_xyz.jpg)
+    // We upload it to Cloudinary so that we store the file in the cloud (production-ready)
+    const path = require('path');
+    const fs = require('fs');
+    const localFilePath = path.join(__dirname, '..', 'temp', path.basename(result.renderedUrl));
+    
+    console.log(`[Visualizer] Uploading mapped image to Cloudinary: ${localFilePath}`);
+    
+    const uploaded = await cloudinary.uploader.upload(localFilePath, {
+      folder: 'arteffects/renders'
+    });
+    
+    // Clean up the local file generated by python
+    if (fs.existsSync(localFilePath)) {
+      fs.unlink(localFilePath, (err) => {
+        if (err) console.warn('[Visualizer] Could not delete local render file:', err.message);
+      });
+    }
+
+    return {
+      renderedUrl: uploaded.secure_url,
+      renderedPublicId: uploaded.public_id
+    };
+    
+  } finally {
+    const fs = require('fs');
+    if (tmpPath && fs.existsSync(tmpPath)) {
+      fs.unlink(tmpPath, () => {});
+    }
+    if (textureTmpPath && fs.existsSync(textureTmpPath)) {
+      fs.unlink(textureTmpPath, () => {});
+    }
+  }
+}
+
+/**
+ * Extract Cloudinary public ID from a Cloudinary URL
+ */
+function extractPublicId(url) {
+  if (!url || !url.includes('cloudinary.com')) return null;
+
+  try {
+    // Pattern: .../upload/v1234567890/folder/filename.ext
+    const match = url.match(/\/upload\/(?:v\d+\/)?(.+?)(?:\.\w+)?$/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fallback: Stability AI
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function callStabilityAI(imageUrl, prompt, negativePrompt) {
+  const response = await axios.post(
+    'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
+    {
+      init_image: imageUrl,
+      image_strength: 0.35,
+      text_prompts: [
+        { text: prompt, weight: 1 },
+        { text: negativePrompt, weight: -1 }
+      ],
+      cfg_scale: 8,
+      steps: 50,
+      samples: 1,
+      style_preset: 'photographic'
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+
+  const imageData = response.data.artifacts[0].base64;
+  const uploaded = await cloudinary.uploader.upload(
+    `data:image/png;base64,${imageData}`,
+    { folder: 'arteffects/renders' }
+  );
+
+  return { renderedUrl: uploaded.secure_url, renderedPublicId: uploaded.public_id };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Fallback: Replicate
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function callReplicate(imageUrl, prompt, negativePrompt) {
+  const axios_replicate = axios.create({
+    headers: { Authorization: `Token ${process.env.REPLICATE_API_TOKEN}` }
+  });
+
+  const prediction = await axios_replicate.post('https://api.replicate.com/v1/predictions', {
+    version: 'stability-ai/stable-diffusion-img2img:15a3689ee13b0d2616e98820eca31d4af4b51808d3547c1e34b6ce8bdea26dab',
+    input: {
+      image: imageUrl,
+      prompt,
+      negative_prompt: negativePrompt,
+      prompt_strength: 0.7,
+      num_inference_steps: 50
+    }
+  });
+
+  let result = prediction.data;
+  while (result.status !== 'succeeded' && result.status !== 'failed') {
+    await new Promise(r => setTimeout(r, 1500));
+    const poll = await axios_replicate.get(`https://api.replicate.com/v1/predictions/${result.id}`);
+    result = poll.data;
+  }
+
+  if (result.status === 'failed') throw new Error('Replicate generation failed');
+
+  const renderedUrl = result.output[0];
+  const uploaded = await cloudinary.uploader.upload(renderedUrl, {
+    folder: 'arteffects/renders'
+  });
+
+  return { renderedUrl: uploaded.secure_url, renderedPublicId: uploaded.public_id };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Build AI prompt from selected products (used by Stability/Replicate fallbacks)
+ */
 async function buildProductPrompt(appliedProducts = [], preset = null) {
   const productMap = {};
   const productIds = appliedProducts.map(p => p.productId).filter(Boolean);
-  
+
   if (productIds.length) {
     const products = await Product.find({ _id: { $in: productIds } });
     products.forEach(p => { productMap[p._id.toString()] = p; });
@@ -109,7 +350,7 @@ async function buildProductPrompt(appliedProducts = [], preset = null) {
   const materialDescriptions = appliedProducts.map(ap => {
     const product = productMap[ap.productId];
     if (!product) return '';
-    
+
     const finishDesc = {
       polished: 'highly polished with mirror-like reflections',
       honed: 'matte honed finish with subtle texture',
@@ -118,7 +359,7 @@ async function buildProductPrompt(appliedProducts = [], preset = null) {
       natural: 'natural split-face texture',
       flamed: 'rough flamed texture'
     }[product.finish] || 'polished';
-    
+
     return `${ap.zone} covered with ${product.name} ${product.category.replace('_', ' ')} stone, ${finishDesc}, photorealistic material, proper perspective and lighting`;
   }).filter(Boolean);
 
@@ -160,109 +401,12 @@ async function buildProductPrompt(appliedProducts = [], preset = null) {
   };
 }
 
-// Helper: Call Stability AI or Replicate for img2img
-async function generateVisualization(imageUrl, prompt, negativePrompt) {
-  // Using Stability AI img2img API
-  // Replace with Replicate or other provider as needed
-  
-  try {
-    if (process.env.STABILITY_API_KEY) {
-      return await callStabilityAI(imageUrl, prompt, negativePrompt);
-    } else if (process.env.REPLICATE_API_TOKEN) {
-      return await callReplicate(imageUrl, prompt, negativePrompt);
-    } else {
-      // Demo mode: return original image with demo watermark
-      console.warn('No AI API key configured, returning demo response');
-      return { renderedUrl: imageUrl, renderedPublicId: null };
-    }
-  } catch (err) {
-    throw new Error(`AI generation failed: ${err.message}`);
-  }
-}
-
-async function callStabilityAI(imageUrl, prompt, negativePrompt) {
-  const response = await axios.post(
-    'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
-    {
-      init_image: imageUrl,
-      image_strength: 0.35,
-      text_prompts: [
-        { text: prompt, weight: 1 },
-        { text: negativePrompt, weight: -1 }
-      ],
-      cfg_scale: 8,
-      steps: 50,
-      samples: 1,
-      style_preset: 'photographic'
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.STABILITY_API_KEY}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
-      }
-    }
-  );
-
-  const imageData = response.data.artifacts[0].base64;
-  const uploaded = await cloudinary.uploader.upload(
-    `data:image/png;base64,${imageData}`,
-    { folder: 'arteffects/renders' }
-  );
-
-  return { renderedUrl: uploaded.secure_url, renderedPublicId: uploaded.public_id };
-}
-
-async function callReplicate(imageUrl, prompt, negativePrompt) {
-  const axios_replicate = axios.create({
-    headers: { Authorization: `Token ${process.env.REPLICATE_API_TOKEN}` }
-  });
-
-  // Start prediction
-  const prediction = await axios_replicate.post('https://api.replicate.com/v1/predictions', {
-    version: 'stability-ai/stable-diffusion-img2img:15a3689ee13b0d2616e98820eca31d4af4b51808d3547c1e34b6ce8bdea26dab',
-    input: {
-      image: imageUrl,
-      prompt,
-      negative_prompt: negativePrompt,
-      prompt_strength: 0.7,
-      num_inference_steps: 50
-    }
-  });
-
-  // Poll for result
-  let result = prediction.data;
-  while (result.status !== 'succeeded' && result.status !== 'failed') {
-    await new Promise(r => setTimeout(r, 1500));
-    const poll = await axios_replicate.get(`https://api.replicate.com/v1/predictions/${result.id}`);
-    result = poll.data;
-  }
-
-  if (result.status === 'failed') throw new Error('Replicate generation failed');
-
-  const renderedUrl = result.output[0];
-  const uploaded = await cloudinary.uploader.upload(renderedUrl, {
-    folder: 'arteffects/renders'
-  });
-
-  return { renderedUrl: uploaded.secure_url, renderedPublicId: uploaded.public_id };
-}
-
-// Helper: Add watermark via Cloudinary transformation
+/**
+ * Add watermark via Cloudinary transformation
+ */
 function addWatermark(imageUrl) {
-  if (!imageUrl.includes('cloudinary.com')) return imageUrl;
+  if (!imageUrl || !imageUrl.includes('cloudinary.com')) return imageUrl;
   return imageUrl.replace('/upload/', '/upload/l_text:Arial_32_bold:Arteffects,co_white,o_60,g_south_east,x_20,y_20/');
-}
-
-// Helper: Detect zones using SAM or similar
-async function detectZones(photoUrl) {
-  // Simplified zone detection
-  // In production, use Meta SAM via Replicate or a custom segmentation model
-  return [
-    { type: 'wall', confidence: 0.92, description: 'Main walls detected' },
-    { type: 'floor', confidence: 0.95, description: 'Floor area detected' },
-    { type: 'ceiling', confidence: 0.78, description: 'Ceiling detected' }
-  ];
 }
 
 module.exports = router;

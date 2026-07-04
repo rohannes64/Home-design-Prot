@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const renderSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: false },
   
   // Original uploaded photo
   originalPhoto: {
