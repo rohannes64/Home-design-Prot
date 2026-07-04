@@ -6,7 +6,7 @@ const Render = require('../models/Render');
 const Product = require('../models/Product');
 const { protect, optionalAuth } = require('../middleware/auth');
 const { uploadRoomPhoto, cloudinary } = require('../middleware/upload');
-const { segmentImage } = require('../utils/segment_bridge');
+const { segmentImage, generateImage, downloadToTemp } = require('../utils/segment_bridge');
 
 // ═══════════════════════════════════════════════════════════════════════════
 // POST /api/visualizer/upload — upload room photo to Cloudinary
@@ -186,7 +186,6 @@ async function generateWithLocalSD(photoUrl, photoPublicId, appliedProducts = []
   const texturePrompt = `${product.name} ${categoryClean} texture`;
   
   // Download the cloudinary photo to a temp file first
-  const { downloadToTemp, generateImage } = require('../utils/segment_bridge');
   let tmpPath = null;
   let textureTmpPath = null;
   

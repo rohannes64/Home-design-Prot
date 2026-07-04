@@ -1,18 +1,15 @@
 /**
  * Segment Bridge — Node.js ↔ Python SegFormer bridge
  * 
- * Downloads a Cloudinary image to a temp file, spawns segment_room.py
- * with --json_only, parses the JSON output, and returns structured zone data.
+ * Downloads a Cloudinary image to a temp file, communicates with the
+ * Python FastAPI microservice, and returns structured zone data.
  */
 
-const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const axios = require('axios');
 
-const PYTHON_SCRIPT = path.join(__dirname, '..', 'segment_room.py');
-const TIMEOUT_MS = 120_000; // 2 minutes (model loading on first run can be slow)
 const PYTHON_API_URL = process.env.PYTHON_API_URL || 'http://localhost:8000';
 
 /**
