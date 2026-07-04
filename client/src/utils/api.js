@@ -52,8 +52,10 @@ export const visualizerAPI = {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 30000
   }),
-  segment: photoUrl => api.post('/visualizer/segment', { photoUrl }),
-  generate: data => api.post('/visualizer/generate', data, { timeout: 120000 })
+  segment: (photoUrl) => api.post('/visualizer/segment', { photoUrl }, {
+    timeout: 150000 // 2.5 min — first run downloads SegFormer model (~85MB)
+  }),
+  generate: data => api.post('/visualizer/generate', data, { timeout: 300000 })
 };
 
 // Renders

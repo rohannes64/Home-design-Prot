@@ -1,12 +1,11 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useQuery } from '@tanstack/react-query';
-import { Upload, Camera, Wand2, Download, Share2, MessageSquare, X, ChevronLeft, Zap, Check, RefreshCw } from 'lucide-react';
+import { Upload, Camera, Wand2, Download, Share2, MessageSquare, X, ChevronLeft, Zap, Check, RefreshCw, Layers, Eye, EyeOff, Loader } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { visualizerAPI, productsAPI } from '../utils/api';
 import QuoteModal from '../components/visualizer/QuoteModal';
 
-const ZONES = ['floor', 'wall', 'ceiling', 'pillar', 'cornice', 'wainscoting', 'elevation', 'exterior'];
 const PRESETS = [
   { id: 'ionic_columns', label: 'Ionic Columns', desc: 'Grand entrance columns', icon: '🏛️' },
   { id: 'cornice', label: 'Cornice Moulding', desc: 'Ceiling edge detail', icon: '🪄' },
@@ -20,19 +19,36 @@ const CATEGORY_LABELS = {
   limestone: 'Limestone', granite: 'Granite', other: 'Other'
 };
 
+// Color map for zone overlay visualization
+const ZONE_COLORS = {
+  wall:     { bg: 'rgba(60, 160, 60, 0.25)',  border: '#3CA03C', label: '🧱 Wall' },
+  floor:    { bg: 'rgba(40, 90, 210, 0.25)',   border: '#285AD2', label: '🏠 Floor' },
+  ceiling:  { bg: 'rgba(160, 100, 40, 0.25)',  border: '#A06428', label: '⬆️ Ceiling' },
+  window:   { bg: 'rgba(200, 200, 60, 0.25)',  border: '#C8C83C', label: '🪟 Window' },
+  door:     { bg: 'rgba(200, 130, 60, 0.25)',  border: '#C8823C', label: '🚪 Door' },
+  column:   { bg: 'rgba(0, 220, 220, 0.25)',   border: '#00DCDC', label: '🏛️ Column' },
+  stairs:   { bg: 'rgba(180, 60, 180, 0.25)',  border: '#B43CB4', label: '🪜 Stairs' },
+  pillar:   { bg: 'rgba(0, 220, 220, 0.25)',   border: '#00DCDC', label: '🏛️ Pillar' },
+};
+
 export default function VisualizerPage() {
   const [step, setStep] = useState(1); // 1=upload, 2=select, 3=result
   const [photo, setPhoto] = useState(null);
   const [uploadedPhoto, setUploadedPhoto] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState([]); // [{productId, zone, estimatedArea}]
-  const [activeZone, setActiveZone] = useState('wall');
+  const [activeZone, setActiveZone] = useState(null);
   const [activePreset, setActivePreset] = useState(null);
   const [activeCategory, setActiveCategory] = useState('all');
   const [result, setResult] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [detectedZones, setDetectedZones] = useState([]); // Real zones from SegFormer
+  const [segmenting, setSegmenting] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(true);
+  const [imageSize, setImageSize] = useState(null); // from segmentation
   const fileInputRef = useRef(null);
+  const imgRef = useRef(null);
 
   const { data: productsData } = useQuery({
     queryKey: ['products', activeCategory],
@@ -42,11 +58,18 @@ export default function VisualizerPage() {
   const products = productsData?.products || [];
   const categories = ['all', ...Object.keys(CATEGORY_LABELS)];
 
+  // Auto-select first detected zone when segmentation completes
+  useEffect(() => {
+    if (detectedZones.length > 0 && !activeZone) {
+      setActiveZone(detectedZones[0].type);
+    }
+  }, [detectedZones, activeZone]);
+
   const onDrop = useCallback(async (acceptedFiles) => {
     const file = acceptedFiles[0];
     if (!file) return;
     setPhoto(URL.createObjectURL(file));
-    
+
     setUploading(true);
     try {
       const formData = new FormData();
@@ -55,6 +78,9 @@ export default function VisualizerPage() {
       setUploadedPhoto(res.data);
       setStep(2);
       toast.success('Photo uploaded!');
+
+      // Automatically trigger segmentation
+      runSegmentation(res.data.photoUrl);
     } catch (err) {
       toast.error('Upload failed. Please try again.');
       setPhoto(null);
@@ -62,6 +88,36 @@ export default function VisualizerPage() {
       setUploading(false);
     }
   }, []);
+
+  const runSegmentation = async (photoUrl) => {
+    setSegmenting(true);
+    try {
+      const res = await visualizerAPI.segment(photoUrl);
+      const zones = res.data.zones || res.data.fallbackZones || [];
+      setDetectedZones(zones);
+      setImageSize(res.data.imageSize || null);
+
+      if (zones.length > 0) {
+        setActiveZone(zones[0].type);
+        toast.success(`Detected ${zones.length} zone${zones.length > 1 ? 's' : ''}: ${zones.map(z => z.type).join(', ')}`);
+      } else {
+        toast('No zones detected — you can still apply materials manually', { icon: '⚠️' });
+      }
+    } catch (err) {
+      console.error('Segmentation error:', err);
+      // Use fallback zones from error response or defaults
+      const fallback = err.response?.data?.fallbackZones || [
+        { type: 'wall', coverage: 0.35, coveragePct: 35, confidence: 0.70 },
+        { type: 'floor', coverage: 0.25, coveragePct: 25, confidence: 0.70 },
+        { type: 'ceiling', coverage: 0.15, coveragePct: 15, confidence: 0.60 }
+      ];
+      setDetectedZones(fallback);
+      setActiveZone(fallback[0]?.type || 'wall');
+      toast('Using approximate zones (AI segmentation unavailable)', { icon: '⚠️' });
+    } finally {
+      setSegmenting(false);
+    }
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -75,8 +131,9 @@ export default function VisualizerPage() {
     if (exists) {
       setSelectedProducts(prev => prev.filter(p => !(p.productId === product._id && p.zone === activeZone)));
     } else {
+      // Replace existing product in this zone (one product per zone)
       setSelectedProducts(prev => [
-        ...prev.filter(p => p.zone !== activeZone || p.productId !== product._id),
+        ...prev.filter(p => p.zone !== activeZone),
         { productId: product._id, zone: activeZone, estimatedArea: 100, product }
       ]);
     }
@@ -113,6 +170,23 @@ export default function VisualizerPage() {
   const handleReset = () => {
     setStep(1); setPhoto(null); setUploadedPhoto(null);
     setSelectedProducts([]); setActivePreset(null); setResult(null);
+    setDetectedZones([]); setActiveZone(null); setImageSize(null);
+  };
+
+  const handleShare = () => {
+    if (!result?.shareToken) {
+      toast.error('Share link not available');
+      return;
+    }
+    const shareUrl = `${window.location.origin}/view/${result.shareToken}`;
+    navigator.clipboard.writeText(shareUrl)
+      .then(() => toast.success('Share link copied to clipboard!'))
+      .catch(() => toast.error('Failed to copy link'));
+  };
+
+  // Get the zone that has a product applied
+  const getZoneProduct = (zoneType) => {
+    return selectedProducts.find(p => p.zone === zoneType);
   };
 
   return (
@@ -190,45 +264,176 @@ export default function VisualizerPage() {
       {step === 2 && (
         <div style={{ display:'grid', gridTemplateColumns:'1fr 360px', minHeight:'calc(100vh - 120px)', gap:0 }}>
           {/* Left: Photo + zone overlay */}
-          <div style={{ position:'sticky', top:64, height:'calc(100vh - 64px)', overflow:'hidden', background:' var(--charcoal)' }}>
-            {photo && (
-              <img src={photo} alt="Your room" style={{ width:'100%', height:'100%', objectFit:'contain' }} />
-            )}
-            {selectedProducts.length > 0 && (
-              <div style={{
-                position:'absolute', bottom:16, left:16, right:16,
-                background:'rgba(44,36,32,0.8)', backdropFilter:'blur(8px)',
-                borderRadius:12, padding:'0.875rem 1rem'
-              }}>
-                <p style={{ color:'white', fontSize:'0.8125rem', fontWeight:500, margin:'0 0 0.5rem' }}>Applied materials</p>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                  {selectedProducts.map((p, i) => (
-                    <span key={i} style={{ padding:'0.25rem 0.625rem', background:'rgba(201,168,76,0.25)', borderRadius:20, fontSize:'0.75rem', color:'var(--gold-light)' }}>
-                      {p.zone}: {p.product?.name}
-                    </span>
-                  ))}
+          <div style={{ position:'sticky', top:64, height:'calc(100vh - 64px)', overflow:'hidden', background:'var(--charcoal)', display:'flex', flexDirection:'column' }}>
+            <div style={{ flex:1, position:'relative', overflow:'hidden' }}>
+              {photo && (
+                <img ref={imgRef} src={photo} alt="Your room" style={{ width:'100%', height:'100%', objectFit:'contain' }} />
+              )}
+
+              {/* Segmentation loading overlay */}
+              {segmenting && (
+                <div style={{
+                  position:'absolute', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(4px)',
+                  display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:12
+                }}>
+                  <Loader size={32} color="var(--gold)" style={{ animation:'spin 1.5s linear infinite' }} />
+                  <p style={{ color:'white', fontWeight:500, fontSize:'0.9375rem' }}>
+                    Analyzing room structure…
+                  </p>
+                  <p style={{ color:'rgba(255,255,255,0.6)', fontSize:'0.8125rem' }}>
+                    AI is detecting walls, floor, ceiling and more
+                  </p>
                 </div>
+              )}
+
+              {/* Zone overlay badges (positioned on image) */}
+              {showOverlay && !segmenting && detectedZones.length > 0 && (
+                <div style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
+                  {detectedZones.map((zone) => {
+                    const colors = ZONE_COLORS[zone.type] || { bg: 'rgba(128,128,128,0.25)', border: '#888', label: zone.type };
+                    const hasProduct = getZoneProduct(zone.type);
+                    const isActive = activeZone === zone.type;
+
+                    // Position badges in a column on the left side
+                    const zoneIndex = detectedZones.indexOf(zone);
+                    const topPos = 12 + zoneIndex * 44;
+
+                    return (
+                      <div key={zone.type}
+                        style={{
+                          position:'absolute', left:12, top:topPos,
+                          display:'flex', alignItems:'center', gap:6,
+                          pointerEvents:'auto', cursor:'pointer',
+                          padding:'6px 12px', borderRadius:8,
+                          background: isActive ? colors.border : 'rgba(0,0,0,0.55)',
+                          border: `2px solid ${isActive ? 'white' : colors.border}`,
+                          backdropFilter:'blur(6px)',
+                          transition:'all 0.2s',
+                          transform: isActive ? 'scale(1.05)' : 'scale(1)',
+                          boxShadow: isActive ? `0 0 12px ${colors.border}` : 'none'
+                        }}
+                        onClick={() => setActiveZone(zone.type)}
+                      >
+                        <span style={{ fontSize:'0.75rem', color:'white', fontWeight:600, textTransform:'uppercase', letterSpacing:0.5 }}>
+                          {colors.label || zone.type}
+                        </span>
+                        <span style={{ fontSize:'0.6875rem', color:'rgba(255,255,255,0.8)', fontWeight:500 }}>
+                          {zone.coveragePct}%
+                        </span>
+                        {hasProduct && (
+                          <Check size={12} color="#4ade80" strokeWidth={3} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Bottom bar: overlay toggle + applied materials */}
+            <div style={{
+              background:'rgba(44,36,32,0.95)', backdropFilter:'blur(8px)',
+              padding:'0.75rem 1rem', borderTop:'1px solid rgba(255,255,255,0.1)'
+            }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: selectedProducts.length > 0 ? 8 : 0 }}>
+                <button
+                  onClick={() => setShowOverlay(!showOverlay)}
+                  style={{
+                    display:'flex', alignItems:'center', gap:6,
+                    background:'none', border:'1px solid rgba(255,255,255,0.2)',
+                    borderRadius:6, padding:'4px 10px', cursor:'pointer', color:'rgba(255,255,255,0.8)',
+                    fontSize:'0.75rem'
+                  }}
+                >
+                  {showOverlay ? <Eye size={14} /> : <EyeOff size={14} />}
+                  {showOverlay ? 'Hide zones' : 'Show zones'}
+                </button>
+                {segmenting && (
+                  <span style={{ fontSize:'0.75rem', color:'var(--gold)', display:'flex', alignItems:'center', gap:4 }}>
+                    <Loader size={12} style={{ animation:'spin 1.5s linear infinite' }} /> Segmenting…
+                  </span>
+                )}
+                {!segmenting && detectedZones.length > 0 && (
+                  <span style={{ fontSize:'0.75rem', color:'rgba(255,255,255,0.5)' }}>
+                    {detectedZones.length} zone{detectedZones.length > 1 ? 's' : ''} detected by AI
+                  </span>
+                )}
               </div>
-            )}
+
+              {selectedProducts.length > 0 && (
+                <>
+                  <p style={{ color:'white', fontSize:'0.8125rem', fontWeight:500, margin:'0 0 0.5rem' }}>Applied materials</p>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                    {selectedProducts.map((p, i) => (
+                      <span key={i} style={{
+                        padding:'0.25rem 0.625rem', background:'rgba(201,168,76,0.25)',
+                        borderRadius:20, fontSize:'0.75rem', color:'var(--gold-light)',
+                        display:'flex', alignItems:'center', gap:4
+                      }}>
+                        {p.zone}: {p.product?.name}
+                        <button
+                          onClick={() => setSelectedProducts(prev => prev.filter((_, idx) => idx !== i))}
+                          style={{ background:'none', border:'none', color:'rgba(255,255,255,0.5)', cursor:'pointer', padding:0, display:'flex' }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Right: Product selector panel */}
           <div style={{ borderLeft:'1px solid var(--border)', background:'var(--warm-white)', overflowY:'auto', height:'calc(100vh - 120px)' }}>
             <div style={{ padding:'1.25rem', borderBottom:'1px solid var(--border)', position:'sticky', top:0, background:'var(--warm-white)', zIndex:10 }}>
               <h3 style={{ marginBottom:4, fontSize:'1.1rem' }}>Choose materials</h3>
-              <p style={{ fontSize:'0.8125rem', margin:0 }}>Select where to apply, then pick a product</p>
+              <p style={{ fontSize:'0.8125rem', margin:0 }}>Select a zone on the photo, then pick a product texture</p>
             </div>
 
-            {/* Zone selector */}
+            {/* Zone selector — real detected zones */}
             <div style={{ padding:'1rem 1.25rem', borderBottom:'1px solid var(--border)' }}>
-              <label style={{ marginBottom:'0.5rem' }}>Apply to zone</label>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                {ZONES.map(zone => (
-                  <button key={zone} onClick={() => setActiveZone(zone)} className={`btn btn-sm ${activeZone === zone ? 'btn-primary' : 'btn-secondary'}`}>
-                    {zone}
-                  </button>
-                ))}
-              </div>
+              <label style={{ marginBottom:'0.5rem', display:'flex', alignItems:'center', gap:6 }}>
+                <Layers size={14} /> Apply to zone
+                {segmenting && <Loader size={12} style={{ animation:'spin 1.5s linear infinite', marginLeft:4 }} />}
+              </label>
+              {detectedZones.length > 0 ? (
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {detectedZones.map(zone => {
+                    const colors = ZONE_COLORS[zone.type] || { border: '#888', label: zone.type };
+                    const hasProduct = getZoneProduct(zone.type);
+                    return (
+                      <button key={zone.type}
+                        onClick={() => setActiveZone(zone.type)}
+                        style={{
+                          padding:'6px 12px', borderRadius:8, cursor:'pointer',
+                          border: `2px solid ${activeZone === zone.type ? colors.border : 'var(--border)'}`,
+                          background: activeZone === zone.type ? `${colors.bg}` : 'transparent',
+                          color: activeZone === zone.type ? 'var(--charcoal)' : 'var(--charcoal-light)',
+                          fontSize:'0.8125rem', fontWeight: activeZone === zone.type ? 600 : 400,
+                          display:'flex', alignItems:'center', gap:4,
+                          transition:'all 0.15s',
+                          fontFamily:'var(--font-body)'
+                        }}
+                      >
+                        {zone.type}
+                        <span style={{ fontSize:'0.6875rem', opacity:0.7 }}>{zone.coveragePct}%</span>
+                        {hasProduct && <Check size={12} color="var(--gold)" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : segmenting ? (
+                <div style={{ display:'flex', alignItems:'center', gap:8, padding:'0.5rem 0', color:'var(--charcoal-light)', fontSize:'0.8125rem' }}>
+                  <Loader size={14} style={{ animation:'spin 1.5s linear infinite' }} />
+                  Detecting room zones with AI…
+                </div>
+              ) : (
+                <p style={{ fontSize:'0.8125rem', color:'var(--charcoal-light)', margin:'0.5rem 0 0' }}>
+                  Upload a photo to detect zones
+                </p>
+              )}
             </div>
 
             {/* Neoclassical presets */}
@@ -264,14 +469,21 @@ export default function VisualizerPage() {
 
             {/* Product grid */}
             <div style={{ padding:'1rem 1.25rem' }}>
+              {!activeZone && detectedZones.length > 0 && (
+                <div style={{ padding:'1rem', background:'rgba(201,168,76,0.08)', borderRadius:10, marginBottom:'1rem', fontSize:'0.8125rem', color:'var(--charcoal)' }}>
+                  ☝️ Select a zone above first, then pick a product to apply
+                </div>
+              )}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
                 {products
                   .filter(p => activeCategory === 'all' || p.category === activeCategory)
                   .map(product => (
-                    <div key={product._id} onClick={() => toggleProduct(product)}
+                    <div key={product._id} onClick={() => activeZone && toggleProduct(product)}
                       style={{
                         border:`2px solid ${isSelected(product._id) ? 'var(--gold)' : 'var(--border)'}`,
-                        borderRadius:12, overflow:'hidden', cursor:'pointer',
+                        borderRadius:12, overflow:'hidden',
+                        cursor: activeZone ? 'pointer' : 'not-allowed',
+                        opacity: activeZone ? 1 : 0.5,
                         background: isSelected(product._id) ? 'rgba(201,168,76,0.06)' : 'transparent',
                         transition:'all 0.15s', position:'relative'
                       }}>
@@ -303,16 +515,16 @@ export default function VisualizerPage() {
 
             {/* Generate button */}
             <div style={{ padding:'1rem 1.25rem', position:'sticky', bottom:0, background:'var(--warm-white)', borderTop:'1px solid var(--border)' }}>
-              <button onClick={handleGenerate} disabled={generating || (selectedProducts.length === 0 && !activePreset)}
+              <button onClick={handleGenerate} disabled={generating || segmenting || (selectedProducts.length === 0 && !activePreset)}
                 className="btn btn-primary btn-lg" style={{ width:'100%', justifyContent:'center' }}>
                 {generating ? (
-                  <><div className="spinner" style={{ width:18, height:18, borderWidth:2 }} /> Generating visualization…</>
+                  <><div className="spinner" style={{ width:18, height:18, borderWidth:2 }} /> Generating with AI…</>
                 ) : (
                   <><Wand2 size={18} /> Generate visualization</>
                 )}
               </button>
               <p style={{ textAlign:'center', fontSize:'0.75rem', color:'var(--charcoal-light)', marginTop:'0.5rem', marginBottom:0 }}>
-                Takes 10–15 seconds
+                {generating ? 'Cloudinary AI is rendering your visualization…' : 'Uses AI to realistically replace surfaces'}
               </p>
             </div>
           </div>
@@ -340,11 +552,20 @@ export default function VisualizerPage() {
             </div>
             <div style={{ borderRadius:16, overflow:'hidden', border:'2px solid var(--gold)' }}>
               <div style={{ padding:'0.5rem 1rem', background:'var(--gold)', color:'var(--charcoal)', fontSize:'0.8125rem', fontWeight:600 }}>
-                After — Arteffects
+                After — Arteffects AI
               </div>
               <img src={result.renderedUrl || photo} alt="Visualized room" style={{ width:'100%', display:'block' }} />
             </div>
           </div>
+
+          {/* Generation info */}
+          {result.generationDuration && (
+            <div style={{ textAlign:'center', marginBottom:'1rem' }}>
+              <span style={{ fontSize:'0.8125rem', color:'var(--charcoal-light)', background:'var(--warm-white)', padding:'4px 12px', borderRadius:20, border:'1px solid var(--border)' }}>
+                ⚡ Generated in {(result.generationDuration / 1000).toFixed(1)}s
+              </span>
+            </div>
+          )}
 
           {/* Actions */}
           <div style={{ display:'flex', gap:'0.75rem', flexWrap:'wrap', marginBottom:'2rem' }}>
@@ -352,7 +573,7 @@ export default function VisualizerPage() {
               className="btn btn-primary">
               <Download size={16} /> Download HD render
             </a>
-            <button className="btn btn-secondary" onClick={() => toast.success('Share link copied!')}>
+            <button className="btn btn-secondary" onClick={handleShare}>
               <Share2 size={16} /> Share visualization
             </button>
             <button className="btn btn-secondary" onClick={() => setShowQuoteModal(true)}>
@@ -396,6 +617,14 @@ export default function VisualizerPage() {
           onClose={() => setShowQuoteModal(false)}
         />
       )}
+
+      {/* Inline keyframe for spinner */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
