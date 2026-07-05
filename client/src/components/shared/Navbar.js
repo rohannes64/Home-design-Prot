@@ -31,8 +31,8 @@ export default function Navbar() {
           <div style={{ width:36, height:36, background:'var(--gold)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center' }}>
             <Layers size={18} color="white" />
           </div>
-          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.25rem', fontWeight:600, color:'var(--charcoal)' }}>
-            Arteffects
+          <span style={{ fontFamily:'var(--font-display)', fontSize:'1.35rem', fontWeight:600, color:'var(--charcoal)', letterSpacing:'0.03em', textTransform:'uppercase' }}>
+            Stratum
           </span>
         </Link>
 
