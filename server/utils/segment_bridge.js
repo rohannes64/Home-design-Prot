@@ -96,7 +96,9 @@ async function generateImage(imageUrl, appliedZones, preset = null) {
     return data;
   } catch (err) {
     if (err.response) {
-      throw new Error(`Python API Error: ${err.response.data?.detail || err.message}`);
+      const detail = err.response.data?.detail;
+      const errorMsg = typeof detail === 'object' ? JSON.stringify(detail) : detail || err.message;
+      throw new Error(`Python API Error: ${errorMsg}`);
     } else if (err.code === 'ECONNREFUSED') {
       throw new Error('Python generation API is not running. Did you start it with uvicorn?');
     }
