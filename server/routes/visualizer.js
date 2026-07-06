@@ -163,7 +163,7 @@ async function generateWithLocalSD(photoUrl, photoPublicId, appliedProducts = []
   const productMap = {};
   const productIds = appliedProducts.map(p => p.productId).filter(Boolean);
   if (productIds.length) {
-    const products = await Product.find({ _id: { $in: productIds } });
+    const products = await Product.find({ _id: { $in: productIds } }).lean();
     products.forEach(p => { productMap[p._id.toString()] = p; });
   }
 
@@ -305,7 +305,7 @@ async function buildProductPrompt(appliedProducts = [], preset = null) {
   const productIds = appliedProducts.map(p => p.productId).filter(Boolean);
 
   if (productIds.length) {
-    const products = await Product.find({ _id: { $in: productIds } });
+    const products = await Product.find({ _id: { $in: productIds } }).lean();
     products.forEach(p => { productMap[p._id.toString()] = p; });
   }
 
