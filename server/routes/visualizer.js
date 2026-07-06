@@ -150,6 +150,27 @@ router.post('/generate', optionalAuth, async (req, res) => {
 // Local SD Pipeline Generation
 // ═══════════════════════════════════════════════════════════════════════════
 
+async function buildProductPrompt(appliedProducts, preset) {
+  if (!appliedProducts || appliedProducts.length === 0) return { prompt: preset || '', appliedProducts: [] };
+  
+  const productIds = appliedProducts.map(p => p.productId).filter(Boolean);
+  const products = await Product.find({ _id: { $in: productIds } }).lean();
+  const productMap = {};
+  products.forEach(p => productMap[p._id.toString()] = p);
+  
+  const detailedProducts = appliedProducts.map(ap => ({
+    ...ap,
+    product: productMap[ap.productId]
+  }));
+  
+  const prompt = detailedProducts.map(ap => `${ap.zone} covered in ${ap.product?.name || 'material'}`).join(', ');
+  
+  return {
+    prompt: preset ? `${preset}, ${prompt}` : prompt,
+    appliedProducts: detailedProducts
+  };
+}
+
 /**
  * Generate visualization using Local Stable Diffusion API.
  */

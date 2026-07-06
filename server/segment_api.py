@@ -34,7 +34,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Pre-load SegFormer model and processor globally on server boot
 print(f"[Segmentation] Pre-loading SegFormer model '{SEG_MODEL}' on {DEVICE}...")
-PROCESSOR = SegformerImageProcessor.from_pretrained(SEG_MODEL, local_files_only=False)
+import warnings
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", FutureWarning)
+    PROCESSOR = SegformerImageProcessor.from_pretrained(SEG_MODEL, local_files_only=False)
 MODEL     = SegformerForSemanticSegmentation.from_pretrained(SEG_MODEL, local_files_only=False)
 MODEL.eval().to(DEVICE)
 if DEVICE == "cuda":
