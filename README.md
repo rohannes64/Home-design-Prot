@@ -295,6 +295,8 @@ Each quote includes: contact details, city, selected SKUs with area estimates, p
 | `CLOUDINARY_API_SECRET` | Yes | Cloudinary API secret |
 | `GOOGLE_CLIENT_ID` | Yes | Google Developer Console OAuth Client ID |
 | `RESEND_API_KEY` | Yes | Resend API Key for Email OTP Verification |
+| `STABILITY_API_KEY` | No | Required if using the SDXL fallback pipeline |
+| `REPLICATE_API_TOKEN` | No | Required if using the Replicate fallback pipeline |
 | `PYTHON_API_URL` | No | Python microservice URL (default: `http://localhost:8000`) |
 | `CLIENT_URL` | Yes | React Frontend URL for CORS |
 | `PORT` | No | Server port (default 5000) |
