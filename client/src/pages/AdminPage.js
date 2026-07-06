@@ -42,7 +42,14 @@ export default function AdminPage() {
   // Mutations
   const seedMutation = useMutation({
     mutationFn: adminAPI.seed,
-    onSuccess: (res) => { toast.success(res.data.message); queryClient.invalidateQueries(['admin-products']); }
+    onSuccess: (res) => { 
+      toast.success(res.data.message); 
+      queryClient.invalidateQueries(['admin-products']); 
+      queryClient.invalidateQueries(['admin-quotes']); 
+      queryClient.invalidateQueries(['admin-users']); 
+      queryClient.invalidateQueries(['admin-dash']);
+    },
+    onError: (err) => toast.error(err.response?.data?.error || 'Failed to seed data')
   });
 
   const deleteMutation = useMutation({
