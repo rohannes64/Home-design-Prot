@@ -143,6 +143,17 @@ label {
 .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; }
 .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; }
 
+.grid-before-after {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+@media (max-width: 768px) {
+  .grid-before-after {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -202,21 +213,21 @@ label {
   }
   
   .visualizer-container {
-    grid-template-columns: 1fr;
-    min-height: auto;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
   }
   
   .visualizer-left-panel {
     position: relative;
-    top: 0;
-    height: 45vh !important; /* Cap the photo visualizer at 45% screen height on mobile */
+    height: 45vh !important;
   }
   
   .visualizer-right-panel {
     border-left: none;
     border-top: 1px solid var(--border);
     height: auto;
-    overflow-y: visible;
+    overflow: visible;
   }
 }
 

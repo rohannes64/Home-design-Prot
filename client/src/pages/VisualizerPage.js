@@ -557,7 +557,7 @@ export default function VisualizerPage() {
           </div>
 
           {/* Before / After */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1.5rem', marginBottom:'1.5rem' }}>
+          <div className="grid-before-after" style={{ marginBottom:'1.5rem' }}>
             <div style={{ borderRadius:16, overflow:'hidden', border:'1px solid var(--border)', display:'flex', flexDirection:'column' }}>
               <div style={{ padding:'0.5rem 1rem', background:'var(--charcoal)', color:'white', fontSize:'0.8125rem', fontWeight:500 }}>Before</div>
               <img src={photo} alt="Original room" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />

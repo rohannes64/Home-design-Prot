@@ -46,7 +46,7 @@ export default function SharedRenderPage() {
 
       <div className="container" style={{ padding:'2.5rem 1.25rem', maxWidth:960 }}>
         {/* Before / After */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1.5rem', marginBottom:'2rem' }}>
+        <div className="grid-before-after" style={{ marginBottom:'2rem' }}>
           <div style={{ borderRadius:16, overflow:'hidden', border:'1px solid var(--border)', display:'flex', flexDirection:'column' }}>
             <div style={{ padding:'0.5rem 1rem', background:'var(--charcoal)', color:'white', fontSize:'0.8125rem', fontWeight:500 }}>Before</div>
             <img src={render.originalPhoto?.url} alt="Original room" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
