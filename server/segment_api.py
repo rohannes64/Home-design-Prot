@@ -86,6 +86,21 @@ class GenerateRequest(BaseModel):
     applied_zones: List[ZoneTexture]
     preset: Optional[str] = None
 
+def cleanup_old_temp_files(age_minutes=5):
+    """Sweeps the temp folder and deletes generated renders older than X minutes."""
+    try:
+        now = time.time()
+        for filename in os.listdir(UPLOAD_DIR):
+            if filename.startswith("render_") and filename.endswith(".jpg"):
+                filepath = os.path.join(UPLOAD_DIR, filename)
+                if now - os.path.getmtime(filepath) > age_minutes * 60:
+                    try:
+                        os.remove(filepath)
+                    except Exception:
+                        pass
+    except Exception as e:
+        print(f"[Cleanup] Error sweeping temp directory: {e}")
+
 
 # ── Stage 1: Segmentation ───────────────────────────────────────────
 def get_segmentation_map(img_bgr):
@@ -174,6 +189,7 @@ def composite(original_bgr, inpainted_pil, mask):
 @app.post("/segment")
 def segment_endpoint(req: SegmentRequest):
     """Returns all detected zones and their coverages (used for UI)."""
+    cleanup_old_temp_files()
     temp_file = None
     try:
         img, temp_file = load_image(req.image_path)
@@ -288,6 +304,7 @@ def run_texture_mapping(img_bgr, mask, texture_path):
 @app.post("/generate")
 def generate_endpoint(req: GenerateRequest):
     """Runs the full pipeline to replace a texture in a specific zone."""
+    cleanup_old_temp_files()
     temp_img = None
     temp_tex_files = []
     try:

@@ -58,6 +58,12 @@ const renderSchema = new mongoose.Schema({
   // Watermarked version
   watermarkedUrl: String,
   
+  // Expiry (renders saved for 30 days)
+  expiresAt: {
+    type: Date,
+    default: () => new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  },
+  
   title: { type: String, default: 'My Room Visualization' },
   notes: String,
   isShared: { type: Boolean, default: false },
@@ -66,5 +72,6 @@ const renderSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 renderSchema.index({ user: 1, createdAt: -1 });
+renderSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 module.exports = mongoose.model('Render', renderSchema);
