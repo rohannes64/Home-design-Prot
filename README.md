@@ -331,7 +331,7 @@ Each quote includes: contact details, city, selected SKUs with area estimates, p
 | `RAZORPAY_KEY_SECRET`| Yes | Razorpay Gateway Key Secret |
 | `STABILITY_API_KEY` | No | Required if using the SDXL fallback pipeline |
 | `REPLICATE_API_TOKEN` | No | Required if using the Replicate fallback pipeline |
-| `PYTHON_API_URL` | No | Python microservice URL (default: `http://localhost:8000`) |
+| `PYTHON_API_URL` | Yes | Python microservice URL (default: `http://localhost:8000`) |
 | `CLIENT_URL` | Yes | React Frontend URL for CORS |
 | `PORT` | No | Server port (default 5000) |
 
