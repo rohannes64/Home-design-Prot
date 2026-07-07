@@ -662,19 +662,19 @@ export default function VisualizerPage() {
           )}
 
           {/* Actions */}
-          <div style={{ display:'flex', gap:'0.75rem', flexWrap:'wrap', justifyContent:'center', marginBottom:'2rem' }}>
+          <div className="grid-4" style={{ marginBottom:'2rem' }}>
             <button onClick={() => handleDownload(result.hdUrl || result.renderedUrl, 'arteffects-visualization.jpg')}
-              className="btn btn-primary">
-              <Download size={16} /> Download HD render
+              className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+              <Download size={16} /> Download HD
             </button>
-            <button className="btn btn-secondary" onClick={handleShare}>
-              <Share2 size={16} /> Share visualization
+            <button className="btn btn-secondary" onClick={handleShare} style={{ width: '100%', justifyContent: 'center' }}>
+              <Share2 size={16} /> Share
             </button>
-            <button className="btn btn-secondary" onClick={() => setShowQuoteModal(true)}>
-              <MessageSquare size={16} /> Request Bulk Quote
+            <button className="btn btn-secondary" onClick={() => setShowQuoteModal(true)} style={{ width: '100%', justifyContent: 'center' }}>
+              <MessageSquare size={16} /> Bulk Quote
             </button>
             <button 
-              className="btn btn-primary" 
+              className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
               onClick={async () => {
                 if (selectedProducts.length === 0) {
                   toast.error('Please select at least one material first.');
@@ -716,13 +716,13 @@ export default function VisualizerPage() {
                   </div>
                 ))}
               </div>
-              <div style={{ display:'flex', gap:'0.75rem', marginTop:'1rem' }}>
-                <button onClick={() => setShowQuoteModal(true)} className="btn btn-secondary" style={{ flex:1 }}>
+              <div className="grid-2" style={{ marginTop:'1rem' }}>
+                <button onClick={() => setShowQuoteModal(true)} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
                   <MessageSquare size={16} /> Request bulk quote
                 </button>
                 <button 
                   className="btn btn-primary" 
-                  style={{ flex:1 }}
+                  style={{ width: '100%', justifyContent: 'center' }}
                   onClick={async () => {
                     toast.loading('Adding to cart...', { id: 'cartAdd2' });
                     try {
