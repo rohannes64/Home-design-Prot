@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
   --gold: #C9A84C;
@@ -22,6 +22,7 @@
   --radius-lg: 16px;
   --font-display: 'Cormorant Garamond', Georgia, serif;
   --font-body: 'Inter', system-ui, sans-serif;
+  --heading-weight: 700;
 }
 
 :root[data-theme="dark"] {
@@ -36,6 +37,7 @@
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.8);
+  --heading-weight: 500;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,7 +53,7 @@ body {
 }
 
 /* Typography */
-h1, h2, h3 { font-family: var(--font-display); font-weight: 500; line-height: 1.2; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: var(--heading-weight); line-height: 1.2; }
 h1 { font-size: clamp(2rem, 5vw, 3.5rem); }
 h2 { font-size: clamp(1.5rem, 3vw, 2.25rem); }
 h3 { font-size: clamp(1.1rem, 2vw, 1.5rem); }
