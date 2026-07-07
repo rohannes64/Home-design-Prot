@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -26,10 +26,13 @@ function ProtectedRoute({ children, adminOnly = false }) {
 }
 
 function AppRoutes() {
+  const location = useLocation();
+  const isHome = location.pathname === '/';
+  
   return (
     <>
       <Navbar />
-      <div style={{ paddingTop: '64px', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ paddingTop: isHome ? '0' : '64px', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/visualizer" element={
