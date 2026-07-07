@@ -95,7 +95,7 @@ export default function HomePage() {
             fontWeight: 500,
             textShadow: theme === 'dark' ? '0 2px 10px rgba(0,0,0,0.8)' : '0 2px 20px rgba(255,255,255,1)'
           }}>
-            See stone in <span style={{ color: 'var(--gold)' }}>your space</span> before you buy.
+            See our stone in <span style={{ color: 'var(--gold)' }}>your space</span> before you buy.
           </p>
           
           <p style={{ 
