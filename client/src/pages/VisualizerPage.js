@@ -642,13 +642,13 @@ export default function VisualizerPage() {
           <div className="grid-before-after" style={{ marginBottom:'1.5rem' }}>
             <div style={{ borderRadius:12, overflow:'hidden', border:'1px solid var(--border)', display:'flex', flexDirection:'column' }}>
               <div style={{ padding:'0.5rem 1rem', background:'var(--charcoal-bg)', color:'white', fontSize:'0.8125rem', fontWeight:500 }}>Before</div>
-              <img src={photo} alt="Original room" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+              <img src={photo} alt="Original room" style={{ width:'100%', maxHeight:'50vh', objectFit:'contain', display:'block', background:'var(--charcoal-bg)' }} />
             </div>
             <div style={{ borderRadius:16, overflow:'hidden', border:'2px solid var(--gold)', display:'flex', flexDirection:'column' }}>
               <div style={{ padding:'0.5rem 1rem', background:'var(--gold)', color:'var(--charcoal)', fontSize:'0.8125rem', fontWeight:600 }}>
                 After — Arteffects AI
               </div>
-              <img src={result.renderedUrl || photo} alt="Visualized room" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+              <img src={result.renderedUrl || photo} alt="Visualized room" style={{ width:'100%', maxHeight:'50vh', objectFit:'contain', display:'block', background:'var(--charcoal-bg)' }} />
             </div>
           </div>
 
