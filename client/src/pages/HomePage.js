@@ -108,7 +108,7 @@ export default function HomePage() {
             Upload a photo of your room. Our cutting-edge AI seamlessly maps premium Italian marble, Gwalior stone, and architectural mouldings with hyper-realistic lighting.
           </p>
           
-          <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap', pointerEvents: 'auto' }}>
+          <div className="hero-btns" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap', pointerEvents: 'auto' }}>
             <Link to="/login" className="btn btn-primary btn-lg" style={{ borderRadius: '30px', padding: '1rem 2.5rem' }}>
               Start Visualizing <ArrowRight size={18} />
             </Link>
@@ -211,7 +211,7 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer style={{ padding: '1rem 0', background: 'var(--charcoal-bg)', color: 'rgba(255,255,255,0.7)' }}>
-        <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div className="container footer-content" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           
           {/* Logo (Left) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>

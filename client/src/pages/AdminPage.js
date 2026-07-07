@@ -159,7 +159,7 @@ export default function AdminPage() {
           <div>
             {dashLoading ? <LoadingView /> : dashData && (
               <>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(2, 1fr)', gap:'0.75rem', marginBottom:'2rem' }}>
+                <div className="grid-4" style={{ marginBottom:'2rem' }}>
                   {[
                     { label:'Clients', value: dashData.stats.users, icon: Users, color:'#3b82f6' },
                     { label:'Products', value: dashData.stats.products, icon: Package, color:'var(--gold)' },

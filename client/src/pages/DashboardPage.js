@@ -64,7 +64,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display:'flex', gap:'1rem', borderBottom:'1px solid var(--border)', marginBottom:'2rem' }}>
+        <div className="tab-scroll" style={{ display:'flex', gap:'1rem', borderBottom:'1px solid var(--border)', marginBottom:'2rem', overflowX: 'auto', WebkitOverflowScrolling: 'touch', whiteSpace: 'nowrap', paddingBottom: '2px' }}>
           {[
             { id: 'profile', label: 'My Profile', icon: UserIcon },
             { id: 'visualizations', label: 'My Visualizations', icon: Wand2 },
@@ -288,7 +288,7 @@ function ProfileTab({ user }) {
           <span style={{ fontSize:'0.75rem', color:'var(--charcoal-light)' }}>Email address cannot be changed.</span>
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem' }}>
+        <div className="grid-2">
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
             <label style={{ fontSize:'0.875rem', fontWeight:600 }}>Full Name</label>
             <input 
@@ -322,7 +322,7 @@ function ProfileTab({ user }) {
           />
         </div>
 
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'1rem' }}>
+        <div className="grid-3">
           <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
             <label style={{ fontSize:'0.875rem', fontWeight:600 }}>City</label>
             <input 
