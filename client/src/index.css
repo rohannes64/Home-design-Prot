@@ -168,6 +168,9 @@ label {
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
 }
+.grid-before-after > div {
+  min-width: 0;
+}
 @media (max-width: 768px) {
   .grid-before-after {
     grid-template-columns: 1fr;
