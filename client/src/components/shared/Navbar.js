@@ -47,10 +47,10 @@ export default function Navbar() {
             <Layers size={18} color="white" />
           </div>
           <div style={{ display:'flex', alignItems:'baseline', gap:'4px' }}>
-            <span style={{ fontFamily:'var(--font-display)', fontSize:'1.4rem', fontWeight:900, color:'var(--charcoal)', letterSpacing:'0.03em', textTransform:'uppercase', textShadow: '0.5px 0 0 var(--charcoal)' }}>
+            <span style={{ fontFamily:'var(--font-display)', fontSize:'clamp(1.1rem, 5vw, 1.4rem)', fontWeight:900, color:'var(--charcoal)', letterSpacing:'0.03em', textTransform:'uppercase', textShadow: '0.5px 0 0 var(--charcoal)' }}>
               Stratum
             </span>
-            <span style={{ fontFamily:'var(--font-body)', fontSize:'0.625rem', fontWeight:600, color:'var(--gold-dark)', letterSpacing:'0.05em', textTransform:'uppercase' }}>
+            <span className="brand-subtitle" style={{ fontFamily:'var(--font-body)', fontSize:'clamp(0.5rem, 2vw, 0.625rem)', fontWeight:600, color:'var(--gold-dark)', letterSpacing:'0.05em', textTransform:'uppercase' }}>
               by DSYN Luxury
             </span>
           </div>
