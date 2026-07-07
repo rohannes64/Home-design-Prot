@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Camera, Palette, Download, ArrowRight, Layers, Star, Zap } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 const steps = [
   { icon: Camera, title: 'Upload Your Space', desc: 'Take a photo of any space — living room, lobby, staircase, or elevation.' },
@@ -18,6 +19,7 @@ const products = [
 
 export default function HomePage() {
   const { theme } = useTheme();
+  const { user } = useAuth();
   return (
     <div style={{ background: 'var(--cream)', minHeight: '100vh', overflowX: 'hidden' }}>
       
@@ -109,7 +111,7 @@ export default function HomePage() {
           </p>
           
           <div className="hero-btns" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap', pointerEvents: 'auto' }}>
-            <Link to="/login" className="btn btn-primary btn-lg" style={{ borderRadius: '30px', padding: '1rem 2.5rem' }}>
+            <Link to={user ? "/visualizer" : "/login"} className="btn btn-primary btn-lg" style={{ borderRadius: '30px', padding: '1rem 2.5rem' }}>
               Start Visualizing <ArrowRight size={18} />
             </Link>
             <Link to="/products" className="btn btn-lg" style={{ 
