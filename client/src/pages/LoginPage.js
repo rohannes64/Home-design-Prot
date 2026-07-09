@@ -58,7 +58,7 @@ export default function LoginPage() {
                     toast.error("Facebook login cancelled");
                 }
             },
-            { scope: "public_profile" },
+            { scope: "public_profile,email" },
         );
     };
 
