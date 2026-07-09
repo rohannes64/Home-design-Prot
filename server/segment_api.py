@@ -15,6 +15,7 @@ import gc
 from PIL import Image
 from transformers import SegformerForSemanticSegmentation, SegformerImageProcessor
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi.staticfiles import StaticFiles
@@ -45,6 +46,22 @@ if DEVICE == "cuda":
 print("[Segmentation] Model pre-loaded successfully!")
 
 app = FastAPI(title="Arteffects Local AI API")
+
+# ✅ CORS Configuration - Allow requests from your frontend domains
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5000", 
+        "https://stratumai.vercel.app",
+        "https://arteffects.onrender.com",
+        "*"  # Allow all origins for testing (remove in production if needed)
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/temp", StaticFiles(directory=UPLOAD_DIR), name="temp")
 
 def load_image(path_or_url):
