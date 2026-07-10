@@ -188,20 +188,23 @@ router.post("/register", async (req, res) => {
             });
         }
 
-        // Dispatch OTP using Resend REST API
+        // Dispatch OTP using Brevo (formerly Sendinblue) API
         try {
-            const resendApiKey = process.env.RESEND_API_KEY;
-            if (resendApiKey && resendApiKey !== "re_your_api_key_here") {
-                console.log(`[Resend] Sending registration OTP to: ${email}`);
+            const brevoApiKey = process.env.BREVO_API_KEY;
+            if (brevoApiKey && brevoApiKey !== "your_brevo_api_key") {
+                console.log(`[Brevo] Sending registration OTP to: ${email}`);
                 await axios.post(
-                    "https://api.resend.com/emails",
+                    "https://api.brevo.com/v3/smtp/email",
                     {
-                        from:
-                            process.env.RESEND_FROM_EMAIL ||
-                            "Stratum by DSYN <onboarding@resend.dev>",
-                        to: email,
+                        sender: {
+                            name: "Stratum by DSYN",
+                            email:
+                                process.env.BREVO_FROM_EMAIL ||
+                                "noreply@stratumai.com",
+                        },
+                        to: [{ email: email }],
                         subject: "Verify your email - Stratum by DSYN",
-                        html: `
+                        htmlContent: `
             <div style="font-family: sans-serif; padding: 20px; color: #333; max-width: 500px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px;">
               <h2 style="color: #c9a84c; text-align: center;">Welcome to Stratum by DSYN!</h2>
               <p>Thank you for registering. Please verify your email using the 6-digit verification code below:</p>
@@ -216,23 +219,24 @@ router.post("/register", async (req, res) => {
                     },
                     {
                         headers: {
-                            Authorization: `Bearer ${resendApiKey}`,
+                            "api-key": brevoApiKey,
                             "Content-Type": "application/json",
                         },
                     },
                 );
+                console.log(`[Brevo] Email sent successfully to: ${email}`);
             } else {
                 console.warn(
-                    `[Resend] Warning: RESEND_API_KEY not configured. OTP code is: ${otpCode}`,
+                    `[Brevo] Warning: BREVO_API_KEY not configured. OTP code is: ${otpCode}`,
                 );
             }
         } catch (mailErr) {
             console.error(
-                "[Resend] Failed to send email:",
+                "[Brevo] Failed to send email:",
                 mailErr.response?.data || mailErr.message,
             );
             console.log(
-                `\n==================================================\n[Resend Fallback] Verification code for ${email} is: ${otpCode}\n==================================================\n`,
+                `\n==================================================\n[Email Fallback] Verification code for ${email} is: ${otpCode}\n==================================================\n`,
             );
         }
 
