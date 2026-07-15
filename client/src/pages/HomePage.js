@@ -42,7 +42,7 @@ export default function HomePage() {
             style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'opacity 0.3s ease' }} 
           />
           {/* Theme-aware overlay for text readability */}
-          <div style={{ position: 'absolute', inset: 0, background: theme === 'dark' ? 'linear-gradient(to bottom, rgba(26,21,18,0.4), rgba(26,21,18,0.85))' : 'linear-gradient(to bottom, rgba(255,255,255,0.2), rgba(255,255,255,0.6))', pointerEvents: 'none', transition: 'background 0.3s ease' }} />
+          <div style={{ position: 'absolute', inset: 0, background: theme === 'dark' ? 'linear-gradient(to bottom, rgba(26,21,18,0.4), rgba(26,21,18,0.85))' : 'linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.3))', pointerEvents: 'none', transition: 'background 0.3s ease' }} />
         </div>
 
         {/* Hero Content (Floating Text without the giant box) */}
