@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import { useTheme } from "../context/ThemeContext";
 import { useAuth } from "../context/AuthContext";
 
 export default function LoginPage() {
+    const { theme } = useTheme();
     const [form, setForm] = useState({ email: "", password: "" });
     const [loading, setLoading] = useState(false);
     const { login, loginWithGoogle, loginWithFacebook } = useAuth();
@@ -195,7 +197,7 @@ export default function LoginPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     overflow: "hidden",
-                    backgroundImage: "url(/images/Stratum_login.png)",
+                    backgroundImage: theme === "dark" ? "url(/images/Stratum_login.png)" : "url(/images/Stratum_login_light.png)",
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                 }}

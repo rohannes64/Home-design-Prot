@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 export default function RegisterPage() {
+    const { theme } = useTheme();
     const location = useLocation();
     const [form, setForm] = useState({
         name: "",
@@ -253,7 +255,7 @@ export default function RegisterPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     overflow: "hidden",
-                    backgroundImage: "url(/images/Stratum_login.png)",
+                    backgroundImage: theme === "dark" ? "url(/images/Stratum_login.png)" : "url(/images/Stratum_login_light.png)",
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                 }}
