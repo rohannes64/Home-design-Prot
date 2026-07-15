@@ -1212,7 +1212,7 @@ function AddProductModal({ onClose, onSuccess }) {
         </div>
     );
 }
-}
+
 
 function OrdersSection() {
     return (

@@ -64,19 +64,19 @@ export default function LoginPage() {
     useEffect(() => {
         let active = true;
 
-        // Initialize Facebook SDK
+        // Must define fbAsyncInit BEFORE loading the script
         window.fbAsyncInit = function () {
             window.FB.init({
                 appId:
                     process.env.REACT_APP_FACEBOOK_APP_ID ||
-                    "your-facebook-app-id",
+                    "27022342030782078",
                 cookie: true,
                 xfbml: true,
                 version: "v18.0",
             });
         };
 
-        // Load Facebook SDK
+        // Load Facebook SDK only if not already loaded
         if (!document.getElementById("facebook-jssdk")) {
             const script = document.createElement("script");
             script.id = "facebook-jssdk";
@@ -84,6 +84,16 @@ export default function LoginPage() {
             script.async = true;
             script.defer = true;
             document.body.appendChild(script);
+        } else if (window.FB) {
+            // SDK already loaded, re-init
+            window.FB.init({
+                appId:
+                    process.env.REACT_APP_FACEBOOK_APP_ID ||
+                    "27022342030782078",
+                cookie: true,
+                xfbml: true,
+                version: "v18.0",
+            });
         }
 
         // Initialize Google Sign-In
