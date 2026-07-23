@@ -2,8 +2,10 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 
 export default function RegisterPage() {
+    const { theme } = useTheme();
     const location = useLocation();
     const [form, setForm] = useState({
         name: "",
@@ -47,56 +49,65 @@ export default function RegisterPage() {
     };
 
     const handleFacebookLogin = () => {
-        if (!window.FB) {
-            toast.error("Facebook SDK not loaded");
-            return;
-        }
-
         setLoading(true);
-        window.FB.login(
-            (response) => {
-                if (response.authResponse) {
-                    loginWithFacebook(response.authResponse.accessToken)
-                        .then((user) => {
-                            toast.success(
-                                `Welcome, ${user.name.split(" ")[0]}!`,
-                            );
-                            navigate("/visualizer");
-                        })
-                        .catch((err) => {
-                            toast.error(
-                                err.response?.data?.error ||
-                                    "Facebook Sign-up failed",
-                            );
-                        })
-                        .finally(() => {
+
+        // Wait for FB SDK to be ready, up to 5 seconds
+        const tryLogin = (attempts = 0) => {
+            if (window.FB) {
+                window.FB.login(
+                    (response) => {
+                        if (response.authResponse) {
+                            loginWithFacebook(response.authResponse.accessToken)
+                                .then((user) => {
+                                    toast.success(
+                                        `Welcome, ${user.name.split(" ")[0]}!`,
+                                    );
+                                    navigate("/visualizer");
+                                })
+                                .catch((err) => {
+                                    toast.error(
+                                        err.response?.data?.error ||
+                                            "Facebook Sign-up failed",
+                                    );
+                                })
+                                .finally(() => setLoading(false));
+                        } else {
                             setLoading(false);
-                        });
-                } else {
-                    setLoading(false);
-                    toast.error("Facebook login cancelled");
-                }
-            },
-            { scope: "public_profile,email" },
-        );
+                            toast.error("Facebook login cancelled");
+                        }
+                    },
+                    { scope: "public_profile,email" },
+                );
+            } else if (attempts < 20) {
+                setTimeout(() => tryLogin(attempts + 1), 250);
+            } else {
+                setLoading(false);
+                toast.error(
+                    "Facebook is taking too long to load. Please try again.",
+                );
+            }
+        };
+
+        tryLogin();
     };
 
     useEffect(() => {
         let active = true;
 
         // Initialize Facebook SDK
+        // Must define fbAsyncInit BEFORE loading the script
         window.fbAsyncInit = function () {
             window.FB.init({
                 appId:
                     process.env.REACT_APP_FACEBOOK_APP_ID ||
-                    "your-facebook-app-id",
+                    "27022342030782078",
                 cookie: true,
                 xfbml: true,
                 version: "v18.0",
             });
         };
 
-        // Load Facebook SDK
+        // Load Facebook SDK only if not already loaded
         if (!document.getElementById("facebook-jssdk")) {
             const script = document.createElement("script");
             script.id = "facebook-jssdk";
@@ -104,6 +115,16 @@ export default function RegisterPage() {
             script.async = true;
             script.defer = true;
             document.body.appendChild(script);
+        } else if (window.FB) {
+            // SDK already loaded on this session, re-init
+            window.FB.init({
+                appId:
+                    process.env.REACT_APP_FACEBOOK_APP_ID ||
+                    "27022342030782078",
+                cookie: true,
+                xfbml: true,
+                version: "v18.0",
+            });
         }
 
         // Initialize Google Sign-In only for register step
@@ -234,7 +255,7 @@ export default function RegisterPage() {
                     alignItems: "center",
                     justifyContent: "center",
                     overflow: "hidden",
-                    backgroundImage: "url(/images/Stratum_login.png)",
+                    backgroundImage: theme === "dark" ? "url(/images/Stratum_login.png)" : "url(/images/Stratum_login_light.png)",
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                 }}
